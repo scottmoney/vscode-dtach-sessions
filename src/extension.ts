@@ -238,6 +238,36 @@ async function attach(session: { name: string; socket: string }): Promise<void> 
   await showOrCreateTerminal(session, args, dtachPath, undefined, true);
 }
 
+/**
+ * Expand the supported subset of VS Code variables in a session-name-prefix
+ * template. Only editor-independent variables are resolvable at create time (the
+ * "+" command isn't scoped to a file), so we support `${workspaceFolder}`,
+ * `${workspaceFolderBasename}` (both from the first workspace folder),
+ * `${userHome}`, and `${env:NAME}`. Any other or unresolvable token — an
+ * unsupported variable, a missing env var, or a workspace variable with no folder
+ * open — expands to the empty string, so the result is always clean (the caller
+ * still runs it through `sanitizeName`). Literal `$` not in `${...}` is left as-is.
+ */
+function expandVariables(template: string): string {
+  const folder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  return template.replace(/\$\{([^}]*)\}/g, (_match, name: string) => {
+    if (name === 'workspaceFolder') {
+      return folder ?? '';
+    }
+    if (name === 'workspaceFolderBasename') {
+      return folder ? path.basename(folder) : '';
+    }
+    if (name === 'userHome') {
+      return os.homedir();
+    }
+    const env = name.match(/^env:(.+)$/);
+    if (env) {
+      return process.env[env[1]] ?? '';
+    }
+    return '';
+  });
+}
+
 /** Turn an arbitrary string (e.g. a folder name) into a valid session name. */
 function sanitizeName(raw: string): string {
   return raw.trim().replace(/[/\s]+/g, '-');
@@ -355,9 +385,26 @@ async function createDeduped(
   }
 }
 
-/** The "+" command: prompt for a name and create a new session (display-name deduped). */
+/** The "+" command: prompt for a name and create a new session (display-name deduped).
+ * When `suggestSessionName` is on the box opens pre-filled with a throwaway default
+ * `<suggestSessionNamePrefix><hash>` (fresh each time, fully selected) so Enter creates
+ * immediately and typing replaces it; when off (the default) the box opens empty — the
+ * tool's original behaviour. The hash reuses `sessionHash()`; the suggestion is a
+ * display-name convenience only, unrelated to the socket's own `_<hash>` (minted
+ * separately by `createSession`) and to `socketPrefix` (the socket-filename prefix). The
+ * prefix comes from settings and may be set via the UI or settings.json, so we expand its
+ * supported `${...}` variables (see `expandVariables`) and then sanitize the *composed*
+ * name at use time — the single guard that covers both input paths — keeping the pre-fill
+ * always valid however the prefix was entered (any `/`/whitespace becomes `-`; empty ⇒
+ * just the hash). */
 async function create(provider: DtachTreeProvider): Promise<void> {
+  const cfg = config();
+  const defaultName = cfg.suggestSessionName
+    ? sanitizeName(`${expandVariables(cfg.suggestSessionNamePrefix)}${sessionHash()}`)
+    : undefined;
   const name = await vscode.window.showInputBox({
+    value: defaultName,
+    valueSelection: defaultName ? [0, defaultName.length] : undefined,
     prompt: 'New dtach session name',
     validateInput: (value) => validateName(value),
   });
