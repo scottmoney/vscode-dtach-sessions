@@ -66,7 +66,7 @@ or the command palette (search "dtach Sessions").
 
 | Command | What it does |
 | --- | --- |
-| **New Session** (`+`) | Prompt for a name and open a fresh shell under dtach. |
+| **New Session** (`+`) | Prompt for a name (pre-filled with a selectable `new-<hash>` default, so Enter creates immediately) and open a fresh shell under dtach. |
 | **Attach** | Open (or focus) a terminal for the session. |
 | **Switch Session** | Fuzzy-find and attach a session without leaving the keyboard. |
 | **Open in Detach Session** | Right-click a folder in the Explorer: pick a listed session to attach, or type a name (defaults to the folder) and create a new one rooted there. Multiple sessions per folder are numbered like **+**. |
@@ -132,6 +132,8 @@ Linux hosts only, and the forwarder needs `python3` on the host. See the
 | --- | --- | --- |
 | `dtachSessions.socketDir` | `~/.dtach-sessions` | Directory holding the sockets (`~` expands to home). Created on first session. |
 | `dtachSessions.socketPrefix` | *(empty)* | Filename prefix; files are `<prefix><name>_<hash>.dtach`. See the migration note below. |
+| `dtachSessions.suggestSessionName` | `false` | Pre-fill the **New Session** (`+`) box with a suggested `<prefix><hash>` name instead of leaving it empty. Off by default (original behaviour); turn on to opt in. |
+| `dtachSessions.suggestSessionNamePrefix` | `new-` | Prefix for that suggested name (`<prefix><hash>`, fully selected), used only when `suggestSessionName` is on. Supports `${workspaceFolderBasename}`, `${workspaceFolder}`, `${userHome}`, and `${env:NAME}` (e.g. `${workspaceFolderBasename}-`); unsupported/unresolvable variables expand to nothing. Display-name only — not `socketPrefix`. `/` and whitespace (including from an expanded path) are converted to `-`; empty means the suggestion is just the hash. |
 | `dtachSessions.startupCommand` | *(empty)* | Command run inside a session's shell on create (not reattach), e.g. `claude`. |
 | `dtachSessions.redrawMethod` | `winch` | `-r` value on attach and create. One of `winch`, `ctrl_l`, `none`. See note below. |
 | `dtachSessions.dtachPath` | `dtach` | Path to the dtach binary; set an absolute path if it is not on `PATH`. |
@@ -214,8 +216,13 @@ and recreate those sessions under the new naming.
 
 No unit suite. Run through these against a build:
 
-1. **+** → `web` creates `~/.dtach-sessions/web_<hash>.dtach`, opens a shell, and
-   a `web` row appears with a relative age.
+1. **+** → the input box opens **empty** (default); type `web` → creates
+   `~/.dtach-sessions/web_<hash>.dtach`, opens a shell, and a `web` row appears
+   with a relative age. Enable `suggestSessionName`: the box now opens pre-filled
+   with `new-<hash>` (fully selected), Enter creates it as-is, and typing still
+   replaces it; setting `suggestSessionNamePrefix` to `wip-` pre-fills `wip-<hash>`,
+   `my proj/` pre-fills the sanitised `my-proj-<hash>`, and
+   `${workspaceFolderBasename}-` pre-fills `<folder-name>-<hash>`.
 2. Click the row: a live TUI renders immediately and the row shows as attached
    (green icon).
 3. With `startupCommand` set to `claude`, a freshly created session auto-runs it.
