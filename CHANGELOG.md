@@ -5,6 +5,46 @@ All notable changes to the **dtach Sessions** extension are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-09-07
+
+### Added
+
+- **Sessions whose dtach process is gone are restarted in place.** A socket file
+  outlives a dtach server that dies without cleaning up — a host reboot, an OOM
+  kill, a `kill -9`. Clicking such a session now starts a fresh server on the
+  same socket, under the same name and id, re-running `startupCommand`, and says
+  so once: the previous output lived in the process that died, and the shell's
+  working directory with it, so the terminal opens at the default. Everything
+  else about the row is unchanged — there is no new "dead" state to learn, and
+  **Kill** already removed a stale socket. Liveness is read from
+  `/proc/net/unix`, so this is Linux hosts only; where it cannot be read, every
+  session is treated as live and behaviour is exactly as before.
+
+### Fixed
+
+- **A session that outlived its server no longer blames
+  `dtachSessions.dtachPath`.** Attaching to such a socket failed within
+  milliseconds *with a success exit status*, so it landed inside the
+  launch-failure window and was reported as a missing or mis-pathed `dtach`
+  binary — sending you to a setting that was never the problem. No doomed
+  terminal is created now, so that warning once again means what it says.
+- **No more ghost "waiting" bell.** A session that recorded a Claude permission
+  prompt before its process died kept showing the amber bell and counting toward
+  the activity-bar badge indefinitely, because `waiting` deliberately never
+  decays. A session with no server now presents no run-state at all. Its status
+  file is left on disk; only an explicit **Kill** removes it.
+- **A terminal whose process has exited is no longer treated as an attachment.**
+  VS Code keeps exited terminals in its list until their tab is closed, so a
+  session killed mid-run showed as **attached** with a green icon — claiming
+  this window was driving it — and clicking the row focused the dead tab instead
+  of reattaching. Such terminals are now ignored everywhere a session is matched
+  to a terminal.
+- **Rename no longer relaunches into a dead socket.** With
+  `dtachSessions.reflectProcessTitle` off, renaming disposed the terminal and
+  reattached; on a session whose server was gone that produced the same
+  `dtachSessions.dtachPath` misdiagnosis. It now leaves the row detached — a
+  rename does not start a process.
+
 ## [0.4.1] - 2026-07-13
 
 ### Fixed
@@ -202,6 +242,8 @@ only — no behaviour changes.
   native integrated terminals on the remote extension host, with terminal
   reuse that survives a window reload.
 
+[0.5.0]: https://github.com/jjsmackay/vscode-dtach-sessions/compare/v0.4.1...v0.5.0
+[0.4.1]: https://github.com/jjsmackay/vscode-dtach-sessions/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/jjsmackay/vscode-dtach-sessions/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/jjsmackay/vscode-dtach-sessions/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/jjsmackay/vscode-dtach-sessions/compare/v0.3.1...v0.3.2

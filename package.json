@@ -2,7 +2,7 @@
   "name": "dtach-sessions",
   "displayName": "dtach Sessions",
   "description": "Persistent terminal sessions in a sidebar — attach and reattach to dtach sessions that survive disconnects and window reloads. A lightweight tmux/screen alternative for Remote-SSH. Keep a long-running CLI — like a Claude or other coding agent — alive across disconnects.",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "icon": "media/logo.png",
   "galleryBanner": {
     "color": "#0D1117",
