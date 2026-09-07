@@ -59,6 +59,18 @@ Code focuses that one instead of stacking a second client on the socket. The lis
 refreshes when you create a session, when the view becomes visible, and on the
 title-bar refresh button.
 
+### Sessions that outlived their dtach process
+
+A socket file survives a dtach process that dies without cleaning up — most
+often a host reboot, but also an OOM kill or a `kill -9`. Those rows stay in the
+list, and clicking one **restarts the session in place**: a fresh dtach server on
+the same socket, under the same name and id, re-running `startupCommand`. The
+previous session's output is gone (it lived in the process that died) and the
+shell's working directory with it, so the terminal opens at the default; you get
+told once, and everything else about the row is unchanged. Rows like these also
+stop reporting a stale Claude status, so a session cannot sit in the sidebar
+showing an amber "waiting" bell that nothing is waiting on. Linux hosts only.
+
 ## Commands
 
 Available from a row's inline icons, its right-click menu, the view's `…` menu,
@@ -67,7 +79,7 @@ or the command palette (search "dtach Sessions").
 | Command | What it does |
 | --- | --- |
 | **New Session** (`+`) | Prompt for a name and open a fresh shell under dtach. |
-| **Attach** | Open (or focus) a terminal for the session. |
+| **Attach** | Open (or focus) a terminal for the session. A session whose dtach process is gone (host reboot, OOM kill) is restarted in place instead. |
 | **Switch Session** | Fuzzy-find and attach a session without leaving the keyboard. |
 | **Open in Detach Session** | Right-click a folder in the Explorer: pick a listed session to attach, or type a name (defaults to the folder) and create a new one rooted there. Multiple sessions per folder are numbered like **+**. |
 | **New Session Here** | Right-click a session row: create a fresh sibling rooted in that session's current working directory (resolved the same way as Restart), joining its name family. |
@@ -226,7 +238,12 @@ No unit suite. Run through these against a build:
 6. Reload the remote window, click a session: it reattaches.
 7. Select several rows → Kill, or Kill All from the `…` menu: all gone.
 8. Drag-select and right-click copy work natively in the attached terminal.
-9. Right-click a folder with no session: the QuickPick shows only "New
+9. Kill a session's dtach process without removing its socket
+   (`pkill -9 -f _<hash>.dtach`): the row keeps listing, any Claude status badge
+   on it clears, and clicking it opens a working shell on the same
+   `_<hash>.dtach` socket with a one-line notice — no warning about
+   `dtachSessions.dtachPath`.
+10. Right-click a folder with no session: the QuickPick shows only "New
    session"; accepting the prefilled name creates it, rooted there. Right-click
    again: an **Attach** row for it now appears above "New session"; picking
    "New session" a second time creates `<folder>-2`. Edit the input to a custom

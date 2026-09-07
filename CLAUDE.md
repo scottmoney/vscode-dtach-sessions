@@ -134,6 +134,72 @@ Shared helpers belong in `provider.ts`; command flow stays in `extension.ts`.
   `relativeAge(status.ts)` when a status exists (activity-relative — tracks the
   agent), falling back to socket `mtimeMs` otherwise; the tooltip keeps the
   honest mtime "last modified".
+- Session **liveness** (`alive` on `DtachSession`) comes from one in-process read
+  of `/proc/net/unix` (`readBoundSockets`), joined per row in `listSessions`:
+  `st.isSocket()` only asks whether the file is a socket, and a master that dies
+  abnormally (host reboot, OOM, `kill -9`) leaves it behind — a clean exit
+  unlinks. Only listening rows (`St 01`) count, since a path is also recorded for
+  each accepted connection and a client wedged on a dead socket would otherwise
+  read as alive. It is read per-refresh, not once at activate, or it goes stale
+  the moment a master dies mid-session. An unreadable table ⇒ everything alive,
+  collapsing to pre-liveness behaviour (Linux `/proc` only, like the reaper).
+  Rejected: a `connect()` probe (touches a live master, which tees one pty to
+  every client under a shared winsize, on every refresh); `pgrep -f` (matches any
+  cmdline mentioning the path — including the shell doing the match); `ss -lx`
+  (an exec and an iproute2 dep for what `/proc` hands over); `/proc/stat` `btime`
+  vs socket mtime (catches only reboot-stale, not a mid-session OOM kill).
+  A path is **not** always recorded as dtach was given it: `sun_path` caps a unix
+  address at 108 bytes, so dtach `chdir`s to the socket's directory and binds the
+  bare basename when the path is longer. Short paths (the default socketDir) show
+  absolute, long ones show basename-only — hence `socketIsBound` matching either
+  form; matching only the absolute path read every session under a long
+  `socketDir` as dead. Basename matching is safe because socket names carry a
+  per-session `_<hash>`, and it errs toward "alive" (pre-liveness behaviour).
+  Related: `lsof -t <socketpath>` returns **empty for a live unix socket** (a
+  path arg doesn't match one — that needs `-U`), so the `lsof -t … || pgrep …` in
+  `resolvePidsCommand` always falls through to pgrep; the comment there claiming
+  lsof is primary is wrong, behaviour is not.
+- A dead socket is **restarted in place** on attach, not reported: `dtach -A`
+  re-binds a stale path, so the session keeps its name and `_<hash>` — and with
+  them its status file and pid-registry key. Deliberately not routed through
+  `restart`, which mints a fresh hash and socket and would orphan the status
+  file; and cwd is *not* preserved, because `sessionCwd` reads it off a live
+  process (the master's shell child, via `lsof`) and there isn't one. Branching
+  **before** the terminal is created is also what fixes the
+  `dtachSessions.dtachPath` misdiagnosis: `dtach -a` on a dead socket exits in
+  milliseconds with `Connection refused` *and* status 0, so it fell inside
+  `maybeWarnLaunchFailure`'s exit-code-blind fast-close window. With no doomed
+  terminal, that warning needs no change to mean what it says. There is
+  deliberately **no** dead row state, Revive command, or Remove Dead command:
+  the distinction stopped being load-bearing once clicking worked, `Kill` already
+  removes a stale socket, and a reboot adds no rows.
+- The `-A` master launch is sole-sourced in **`launchMaster`** (arg vector +
+  `startupCommand` replay), shared by `createSession` and attach's restart
+  branch; neither reaps (a new socket has no clients, a masterless one can't
+  either). `refreshWhenReady` polls **`socketIsBound`**, not `fs.existsSync` —
+  on the restart path the socket file is what *survived*, so an existence probe
+  passes instantly and refreshes before dtach re-binds.
+- `attach` is not the only `-a` launch: **`rename`** with `reflectProcessTitle`
+  off disposes and relaunches `-a`, and a terminal matched by
+  `findTerminalForSocket` does **not** prove a live master — so it skips the
+  relaunch when the session is dead (a rename must not start a process). Those
+  two, plus `createSession`, are every path reaching `trackTerminal`, i.e. every
+  path that can trip the fast-close warning. `copyAttachCommand` still hands out
+  `-a` for a dead socket on purpose: it copies an *attach* command, and a `-A`
+  would silently create a session instead.
+- `findTerminalForSocket` ignores terminals whose **process has exited**
+  (`exitStatus !== undefined`) — VS Code keeps those in `window.terminals` until
+  the tab is closed. A dtach client cannot outlive its master, so a session
+  OOM-killed mid-session is guaranteed to have an exited terminal still matching
+  its socket, and reusing it would `show()` a dead tab and skip the
+  restart-in-place. Every other caller wants this too: an exited terminal isn't
+  "attached", holds no reapable client pid, and can't be renamed into.
+- Status suppression for a dead session happens in **`statusFor`** — the one join
+  every consumer passes through — so the row badge, row icon, `countWaiting`
+  badge, and `status` sort order cannot disagree, and a pre-reboot `waiting` can't
+  leave a bell nothing is waiting on. It leaves the status *file* alone
+  (`removeStatus` fires on kill, where intent is explicit), so the deliberate
+  no-decay rule for `waiting`/`done` is untouched.
 - Detached rows are dimmed via a `FileDecorationProvider`
   (`DetachedRowDecorations`), **not** a `TreeItem` treatment (VS Code has none):
   it tints the row **label** only and leaves `iconPath` untouched — so a detached
