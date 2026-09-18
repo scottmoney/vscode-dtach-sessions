@@ -331,6 +331,16 @@
           "default": "",
           "description": "Filename prefix for dtach sockets. Files are named <prefix><name>_<hash>.dtach. Defaults to empty; the dedicated socket directory plus the .dtach suffix identify sessions. Set this to '.claude-' to keep seeing sockets created by older versions."
         },
+        "dtachSessions.suggestSessionName": {
+          "type": "boolean",
+          "default": false,
+          "description": "Pre-fill the New Session (+) input box with a suggested throwaway name instead of leaving it empty. Off by default, preserving the original empty-box behaviour; turn it on to have the box open with <prefix><hash> fully selected, so Enter creates immediately and typing replaces it. The prefix and its sanitisation are controlled by 'suggestSessionNamePrefix'."
+        },
+        "dtachSessions.suggestSessionNamePrefix": {
+          "type": "string",
+          "default": "new-",
+          "description": "Prefix for the suggested name pre-filled in the New Session (+) input box when 'suggestSessionName' is enabled: the box opens with <prefix><hash> (a fresh 6-hex id), fully selected. Supports a subset of VS Code variables: ${workspaceFolderBasename}, ${workspaceFolder}, ${userHome}, and ${env:NAME} (e.g. 'wip-${workspaceFolderBasename}-'); unsupported or unresolvable variables expand to nothing. Display-name convenience only — NOT 'socketPrefix' (which prefixes the socket filename). Any '/' or whitespace (including from an expanded path) is converted to '-' so the pre-filled name is always valid; empty makes the suggested name just the hash. Has no effect while 'suggestSessionName' is off."
+        },
         "dtachSessions.startupCommand": {
           "type": "string",
           "default": "",

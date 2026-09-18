@@ -94,6 +94,8 @@ const SORT_BY_VALUES: SortBy[] = ['created', 'lastAttached', 'name', 'status'];
 export interface DtachConfig {
   socketDir: string;
   socketPrefix: string;
+  suggestSessionName: boolean;
+  suggestSessionNamePrefix: string;
   redrawMethod: string;
   dtachPath: string;
   startupCommand: string;
@@ -109,6 +111,8 @@ export function config(): DtachConfig {
   return {
     socketDir: expandHome(c.get<string>('socketDir', '~/.dtach-sessions')),
     socketPrefix: c.get<string>('socketPrefix', ''),
+    suggestSessionName: c.get<boolean>('suggestSessionName', false),
+    suggestSessionNamePrefix: c.get<string>('suggestSessionNamePrefix', 'new-'),
     redrawMethod: c.get<string>('redrawMethod', 'winch'),
     dtachPath: c.get<string>('dtachPath', 'dtach'),
     startupCommand: c.get<string>('startupCommand', ''),
